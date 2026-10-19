@@ -260,8 +260,22 @@ WJ.Game = (function () {
     document.getElementById('menu-play').addEventListener('click', function () {
       WJ.Audio.unlock();
       const ap = meta.activePlanet || 0;
-      if (meta.planets[ap]) startPlanet(ap);
-      else newPlanet(ap);
+      // тяжёлая генерация мира — под оверлеем, чтобы экран не «замерзал»
+      const bootEl = document.getElementById('boot');
+      const bootText = document.getElementById('boot-text');
+      if (bootEl) {
+        bootEl.classList.remove('hidden');
+        bootEl.style.opacity = '1';
+        if (bootText) bootText.textContent = WJ.I18n.t('ui.generating');
+      }
+      setTimeout(function () {
+        try {
+          if (meta.planets[ap]) startPlanet(ap);
+          else newPlanet(ap);
+        } finally {
+          if (bootEl) { bootEl.style.opacity = '0'; setTimeout(function () { bootEl.classList.add('hidden'); }, 600); }
+        }
+      }, 40);
     });
     document.getElementById('menu-ach').addEventListener('click', function () {
       WJ.UI.showAchievements(meta.achievements);

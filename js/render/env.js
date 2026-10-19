@@ -110,6 +110,47 @@ WJ.Env = (function () {
     return { a: p[a], b: p[b], k: U.sat(k) };
   }
 
+  // Мебель комнаты: два стула у стола + дощатый пол
+  function buildFurniture(rng, wood, woodN) {
+    const chairMat = new THREE.MeshPhysicalMaterial({
+      map: wood, roughness: 0.5, metalness: 0.02, clearcoat: 0.4, clearcoatRoughness: 0.3,
+      normalMap: woodN, normalScale: new THREE.Vector2(0.3, 0.3),
+    });
+    function chair() {
+      const g = new THREE.Group();
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.09, 0.95), chairMat);
+      seat.position.y = 1.72; seat.castShadow = true; g.add(seat);
+      for (let i = 0; i < 4; i++) {
+        const lx = (i % 2 ? 0.42 : -0.42), lz = (i < 2 ? 0.4 : -0.4);
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.035, 1.72, 10), chairMat);
+        leg.position.set(lx, 0.86, lz); leg.castShadow = true; g.add(leg);
+      }
+      for (let i = 0; i < 2; i++) {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.95, 10), chairMat);
+        post.position.set(i ? 0.42 : -0.42, 2.2, -0.42); post.castShadow = true; g.add(post);
+      }
+      for (let i = 0; i < 3; i++) {
+        const slat = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.16, 0.045), chairMat);
+        slat.position.set(0, 2.0 + i * 0.3, -0.44); slat.castShadow = true; g.add(slat);
+      }
+      return g;
+    }
+    const c1 = chair(); c1.position.set(5.6, -1.85, 2.4); c1.rotation.y = -0.7; group.add(c1);
+    const c2 = chair(); c2.position.set(-5.4, -1.85, -2.6); c2.rotation.y = 2.5; group.add(c2);
+
+    // пол
+    const floorTex = woodTexture(rng.int(1, 1e9) + 3);
+    floorTex.repeat.set(7, 7);
+    const floorMat = new THREE.MeshStandardMaterial({
+      map: floorTex, color: 0x8a7a6a, roughness: 0.75, metalness: 0,
+    });
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(34, 34), floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -1.9;
+    floor.receiveShadow = true;
+    group.add(floor);
+  }
+
   function init(sc, rng) {
     scene = sc;
     group = new THREE.Group();
@@ -117,17 +158,21 @@ WJ.Env = (function () {
 
     // --- Стол ---
     const wood = woodTexture(rng.int(1, 1e9));
-    const woodN = noiseNormalMap(512, 1.2, rng.int(1, 1e9));
+    const woodN = noiseNormalMap(256, 1.6, rng.int(1, 1e9));
     const tableGeo = new THREE.BoxGeometry(14, 0.5, 9);
-    const tableMat = new THREE.MeshStandardMaterial({
-      map: wood, roughness: 0.55, metalness: 0.02,
+    const tableMat = new THREE.MeshPhysicalMaterial({
+      map: wood, roughness: 0.42, metalness: 0.02,
+      clearcoat: 0.55, clearcoatRoughness: 0.28, // лакированное дерево
       normalMap: woodN, normalScale: new THREE.Vector2(0.35, 0.35),
     });
     wood.repeat.set(2.2, 1.4); woodN.repeat.set(2.2, 1.4);
     tableMesh = new THREE.Mesh(tableGeo, tableMat);
     tableMesh.position.set(0, -0.26, 0);
     tableMesh.receiveShadow = true;
+    tableMesh.castShadow = true;
     group.add(tableMesh);
+
+    buildFurniture(rng, wood, woodN);
 
     // --- Фон-комната: большой бэкдроп + боке ---
     backdrop = new THREE.Mesh(

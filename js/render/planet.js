@@ -51,26 +51,140 @@ WJ.Planet = (function () {
   }
 
   function buildTerrain(tier) {
-    const sub = tier === 'low' ? 4 : (tier === 'medium' ? 5 : 6);
-    terrainGeo = new THREE.IcosahedronGeometry(1, sub);
+    // сфера с UV (нужны для попиксельной текстуры), рельеф — тем же heightAt
+    const segA = tier === 'low' ? 96 : 160, segB = tier === 'low' ? 64 : 112;
+    terrainGeo = new THREE.SphereGeometry(1, segA, segB);
     const pos = terrainGeo.attributes.position;
-    const colors = new Float32Array(pos.count * 3);
     const v = new THREE.Vector3();
     for (let i = 0; i < pos.count; i++) {
       v.set(pos.getX(i), pos.getY(i), pos.getZ(i)).normalize();
       const h = heightAt(v.x, v.y, v.z);
       const r = 1 + h;
       pos.setXYZ(i, v.x * r, v.y * r, v.z * r);
-      const moisture = noise.fbm3(v.x * 2.2 + 9, v.y * 2.2 - 3, v.z * 2.2 + 2, 3, 2, 0.5) * 0.5 + 0.5;
-      const col = biomeColor(h, v, moisture);
-      colors[i * 3] = col[0]; colors[i * 3 + 1] = col[1]; colors[i * 3 + 2] = col[2];
     }
-    terrainGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     terrainGeo.computeVertexNormals();
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0.0, flatShading: false });
+    const maps = buildTerrainMaps(tier);
+    const mat = new THREE.MeshStandardMaterial({
+      map: maps.color, normalMap: maps.normal,
+      roughness: 0.82, metalness: 0.0,
+    });
+    mat.normalScale = new THREE.Vector2(0.65, 0.65);
     terrain = new THREE.Mesh(terrainGeo, mat);
     terrain.castShadow = true; terrain.receiveShadow = true;
     group.add(terrain);
+    if (maps.refine) maps.refine(); // фоновое уточнение текстуры до 1024x512
+  }
+
+  // Попиксельная карта цвета (equirect) + нормал-карта из того же рельефа.
+  // Функции те же, что для смещения вершин, поэтому текстура совпадает с геометрией.
+  // Двухфазно: быстрый черновик (512x256) сразу, полные 1024x512 — чанками в фоне.
+  let refineState = null;
+  function genPass(W, H, texFromCanvas) {
+    let maxAniso = 1;
+    try { maxAniso = WJ.Render.renderer.capabilities.getMaxAnisotropy(); } catch (e) {}
+    const grain = refineState && refineState.grain ? refineState.grain : WJ.Noise.create(rng.int(1, 1e9) + 777);
+    const cnv = document.createElement('canvas'); cnv.width = W; cnv.height = H;
+    const ctx = cnv.getContext('2d');
+    const img = ctx.createImageData(W, H);
+    const hBuf = new Float32Array(W * H);
+    const gBuf = new Float32Array(W * H);
+    const rowF = genRowFunction(W, H, grain, img, hBuf, gBuf);
+    return { W, H, cnv, ctx, img, hBuf, gBuf, rowF, maxAniso };
+  }
+  function genRowFunction(W, H, grain, img, hBuf, gBuf) {
+    return function (y) {
+      const theta = (y / H) * Math.PI;
+      const st = Math.sin(theta), ct = Math.cos(theta);
+      for (let x = 0; x < W; x++) {
+        const phi = (x / W) * Math.PI * 2;
+        const dx = -Math.cos(phi) * st, dy = ct, dz = Math.sin(phi) * st;
+        const h = heightAt(dx, dy, dz);
+        const g = grain.fbm3(dx * 16, dy * 16, dz * 16, 2, 2, 0.5);
+        const i = y * W + x;
+        hBuf[i] = h; gBuf[i] = g;
+        // влага нужна только суше — экономим октавы на океане
+        const moisture = (h > seaLevel + 0.008)
+          ? noise.fbm3(dx * 2.2 + 9, dy * 2.2 - 3, dz * 2.2 + 2, 3, 2, 0.5) * 0.5 + 0.5
+          : 0.5;
+        const col = biomeColor(h, { x: dx, y: dy, z: dz }, moisture);
+        const shade = 1 + g * 0.12;
+        const px = i * 4;
+        img.data[px] = U.sat(col[0] * shade) * 255;
+        img.data[px + 1] = U.sat(col[1] * shade) * 255;
+        img.data[px + 2] = U.sat(col[2] * shade) * 255;
+        img.data[px + 3] = 255;
+      }
+    };
+  }
+  function finishNormal(p) {
+    const W = p.W, H = p.H;
+    const ncnv = document.createElement('canvas'); ncnv.width = W; ncnv.height = H;
+    const nctx = ncnv.getContext('2d');
+    const nimg = nctx.createImageData(W, H);
+    const kU = (W / (Math.PI * 2)) * 10, kV = (H / Math.PI) * 10;
+    const f = function (xx, yy) { const i = yy * W + xx; return p.hBuf[i] + p.gBuf[i] * 0.006; };
+    for (let y = 0; y < H; y++) {
+      const yU = (y - 1 + H) % H, yD = (y + 1) % H;
+      for (let x = 0; x < W; x++) {
+        const xL = (x - 1 + W) % W, xR = (x + 1) % W;
+        let nx = -(f(xR, y) - f(xL, y)) * 0.5 * kU;
+        let ny = -(f(x, yU) - f(x, yD)) * 0.5 * kV;
+        const nz = 1 / Math.sqrt(nx * nx + ny * ny + 1);
+        const px = (y * W + x) * 4;
+        nimg.data[px] = (nx * nz * 0.5 + 0.5) * 255;
+        nimg.data[px + 1] = (ny * nz * 0.5 + 0.5) * 255;
+        nimg.data[px + 2] = (nz * 0.5 + 0.5) * 255;
+        nimg.data[px + 3] = 255;
+      }
+    }
+    nctx.putImageData(nimg, 0, 0);
+    const normalTex = new THREE.CanvasTexture(ncnv);
+    normalTex.wrapS = THREE.RepeatWrapping;
+    normalTex.anisotropy = p.maxAniso;
+    return normalTex;
+  }
+  function buildTerrainMaps(tier) {
+    const draftW = 512, draftH = 256;
+    const p = genPass(draftW, draftH);
+    for (let y = 0; y < draftH; y++) p.rowF(y);
+    p.ctx.putImageData(p.img, 0, 0);
+    const colorTex = new THREE.CanvasTexture(p.cnv);
+    colorTex.encoding = THREE.sRGBEncoding;
+    colorTex.wrapS = THREE.RepeatWrapping;
+    colorTex.anisotropy = p.maxAniso;
+    const normalTex = finishNormal(p);
+    const maps = { color: colorTex, normal: normalTex };
+    if (tier === 'low') return maps;
+    // фоновое уточнение до 1024x512: чанки по 24 строки, без фриза
+    maps.refine = function () { startRefine(1024, 512, maps); };
+    return maps;
+  }
+  let refineToken = 0;
+  function startRefine(W, H, maps) {
+    const token = refineToken;
+    const p = genPass(W, H);
+    let row = 0;
+    const step = function () {
+      if (token !== refineToken) return; // мир пересоздан
+      if (!terrain || !terrain.material) return;
+      const end = Math.min(H, row + 24);
+      for (; row < end; row++) p.rowF(row);
+      if (row < H) { setTimeout(step, 0); return; }
+      p.ctx.putImageData(p.img, 0, 0);
+      const colorTex = new THREE.CanvasTexture(p.cnv);
+      colorTex.encoding = THREE.sRGBEncoding;
+      colorTex.wrapS = THREE.RepeatWrapping;
+      colorTex.anisotropy = p.maxAniso;
+      const normalTex = finishNormal(p);
+      if (token !== refineToken || !terrain || !terrain.material) { colorTex.dispose(); normalTex.dispose(); return; }
+      const oldC = terrain.material.map, oldN = terrain.material.normalMap;
+      terrain.material.map = colorTex;
+      terrain.material.normalMap = normalTex;
+      terrain.material.needsUpdate = true;
+      if (oldC) oldC.dispose();
+      if (oldN) oldN.dispose();
+    };
+    setTimeout(step, 0);
   }
 
   function buildWater() {
@@ -369,12 +483,14 @@ WJ.Planet = (function () {
   }
 
   function dispose() {
+    refineToken++; // отменить фоновое уточнение текстуры
     group.traverse(function (o) {
       if (o.geometry) o.geometry.dispose();
       if (o.material) {
         const mats = Array.isArray(o.material) ? o.material : [o.material];
         mats.forEach(function (m) {
           if (m.map) m.map.dispose();
+          if (m.normalMap) m.normalMap.dispose();
           if (m.alphaMap) m.alphaMap.dispose();
           m.dispose();
         });
