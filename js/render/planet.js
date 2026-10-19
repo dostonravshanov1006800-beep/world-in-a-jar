@@ -157,6 +157,7 @@ WJ.Planet = (function () {
     ctx.putImageData(img, 0, 0);
     const t = new THREE.CanvasTexture(c);
     t.wrapS = THREE.RepeatWrapping;
+    try { t.anisotropy = WJ.Render.renderer.capabilities.getMaxAnisotropy(); } catch (e) {}
     return t;
   }
   function buildClouds() {

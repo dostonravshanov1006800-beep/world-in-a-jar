@@ -33,10 +33,11 @@ WJ.Jar = (function () {
   }
 
   function scratchAlphaTex(rng) {
-    const c = document.createElement('canvas'); c.width = c.height = 256;
+    const c = document.createElement('canvas'); c.width = c.height = 512;
     const ctx = c.getContext('2d');
+    ctx.setTransform(2, 0, 0, 2, 0, 0); // рисуем в координатах 256, храним 512
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 60; i++) {
       ctx.strokeStyle = 'rgba(0,0,0,' + rng.range(0.05, 0.2).toFixed(2) + ')';
       ctx.lineWidth = rng.range(0.4, 1.1);
       const x = rng.next() * 256, y = rng.next() * 256, a = rng.next() * Math.PI;
@@ -45,6 +46,7 @@ WJ.Jar = (function () {
     }
     const t = new THREE.CanvasTexture(c);
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    try { t.anisotropy = WJ.Render.renderer.capabilities.getMaxAnisotropy(); } catch (e) {}
     return t;
   }
 
@@ -123,10 +125,11 @@ WJ.Jar = (function () {
 
   function buildTag(planetName) {
     tagCanvas = document.createElement('canvas');
-    tagCanvas.width = 256; tagCanvas.height = 128;
+    tagCanvas.width = 512; tagCanvas.height = 256; // 4x плотность пикселей бирки
     tagCtx = tagCanvas.getContext('2d');
     tagTex = new THREE.CanvasTexture(tagCanvas);
     tagTex.encoding = THREE.sRGBEncoding;
+    try { tagTex.anisotropy = WJ.Render.renderer.capabilities.getMaxAnisotropy(); } catch (e) {}
     const mat = new THREE.MeshStandardMaterial({ map: tagTex, transparent: true, side: THREE.DoubleSide, roughness: 0.9 });
     tag = new THREE.Mesh(new THREE.PlaneGeometry(0.66, 0.33), mat);
     tag.position.set(-JAR_R - 0.32, 1.15, 0.55);
@@ -142,6 +145,7 @@ WJ.Jar = (function () {
   }
   function setTagName(name) {
     const ctx = tagCtx;
+    ctx.setTransform(2, 0, 0, 2, 0, 0); // рисуем в координатах 256x128 на холсте 512x256
     ctx.clearRect(0, 0, 256, 128);
     ctx.fillStyle = '#f2e6ce';
     ctx.beginPath();

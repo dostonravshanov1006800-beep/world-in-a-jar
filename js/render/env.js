@@ -7,6 +7,9 @@ WJ.Env = (function () {
   let envRT = null;
 
   // ---- Процедурные текстуры (Canvas 2D) ----
+  function maxAniso() {
+    try { return (WJ.Render.renderer && WJ.Render.renderer.capabilities.getMaxAnisotropy()) || 1; } catch (e) { return 1; }
+  }
   function canvasTex(w, h, draw) {
     const c = document.createElement('canvas');
     c.width = w; c.height = h;
@@ -14,6 +17,7 @@ WJ.Env = (function () {
     const t = new THREE.CanvasTexture(c);
     t.encoding = THREE.sRGBEncoding;
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = maxAniso();
     return t;
   }
   function noiseNormalMap(size, strength, seed) {
@@ -41,11 +45,12 @@ WJ.Env = (function () {
     ctx.putImageData(img, 0, 0);
     const t = new THREE.CanvasTexture(c);
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = maxAniso();
     return t;
   }
   function woodTexture(seed) {
     const rng = WJ.Rng.create(seed + 7);
-    return canvasTex(512, 512, function (ctx, w, h) {
+    return canvasTex(1024, 1024, function (ctx, w, h) {
       ctx.fillStyle = '#6b4a2e'; ctx.fillRect(0, 0, w, h);
       // волокна
       for (let i = 0; i < 130; i++) {
@@ -112,7 +117,7 @@ WJ.Env = (function () {
 
     // --- Стол ---
     const wood = woodTexture(rng.int(1, 1e9));
-    const woodN = noiseNormalMap(256, 1.2, rng.int(1, 1e9));
+    const woodN = noiseNormalMap(512, 1.2, rng.int(1, 1e9));
     const tableGeo = new THREE.BoxGeometry(14, 0.5, 9);
     const tableMat = new THREE.MeshStandardMaterial({
       map: wood, roughness: 0.55, metalness: 0.02,

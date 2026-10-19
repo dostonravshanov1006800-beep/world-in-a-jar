@@ -109,8 +109,9 @@ WJ.Config = (function () {
 
   // Тиры качества
   CFG.tiers = {
-    high:   { glass: 'transmission', shadow: 2048, post: 2, icoSub: 7, instances: 600, particles: 250, pixelRatio: 2.75 },
-    medium: { glass: 'transmission', shadow: 1024, post: 1,  icoSub: 6, instances: 350, particles: 150, pixelRatio: 2.5 },
+    // pixelRatio = потолок devicePixelRatio; high рендерит в нативном разрешении экрана (до 4x = «4K» на телефоне)
+    high:   { glass: 'transmission', shadow: 2048, post: 2, icoSub: 7, instances: 600, particles: 250, pixelRatio: 4 },
+    medium: { glass: 'transmission', shadow: 1536, post: 1,  icoSub: 6, instances: 350, particles: 150, pixelRatio: 3 },
     low:    { glass: 'fake',         shadow: 0,    post: 0,  icoSub: 5, instances: 150, particles: 60,  pixelRatio: 1.5 },
   };
 
