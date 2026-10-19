@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<!-- FILE: index.html -->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1c1712">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%2210%22 fill=%22%235fd1c0%22/%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%225%22 fill=%22%23f2b45a%22/%3E%3C/svg%3E">
+<title>Мир в банке — World in a Jar</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="gl"></canvas>
+
+  <!-- HUD: верх -->
+  <div id="hud-top" class="hidden">
+    <div class="hud-group left">
+      <div class="chip" id="chip-day"><svg class="ic" viewBox="0 0 24 24" id="ic-tod"></svg><span id="day-num"></span></div>
+      <div class="chip" id="chip-harmony" title="">
+        <svg class="ic" viewBox="0 0 24 24" id="ic-harmony"></svg>
+        <svg class="ring" viewBox="0 0 36 36"><circle class="ring-bg" cx="18" cy="18" r="15"/><circle class="ring-val" id="harmony-ring" cx="18" cy="18" r="15"/></svg>
+        <span id="harmony-num"></span>
+      </div>
+    </div>
+    <div class="hud-group right">
+      <div class="chip" id="chip-energy">
+        <svg class="ic" viewBox="0 0 24 24" id="ic-energy"></svg>
+        <div class="bar"><div class="bar-val" id="energy-bar"></div></div>
+        <span id="energy-num"></span>
+      </div>
+      <button class="icon-btn" id="btn-pause" aria-label="pause"><svg class="ic" viewBox="0 0 24 24" id="ic-pause"></svg></button>
+      <button class="icon-btn" id="btn-speed" aria-label="speed"><svg class="ic" viewBox="0 0 24 24" id="ic-speed"></svg></button>
+      <button class="icon-btn" id="btn-settings" aria-label="settings"><svg class="ic" viewBox="0 0 24 24" id="ic-settings"></svg></button>
+    </div>
+  </div>
+
+  <!-- HUD: низ -->
+  <div id="hud-bottom" class="hidden">
+    <div id="weather-dock"></div>
+    <div class="bottom-row">
+      <button class="btn wide" id="btn-chronicle"></button>
+      <div class="chip" id="chip-pop"><svg class="ic" viewBox="0 0 24 24" id="ic-pop"></svg><span id="pop-num"></span></div>
+      <button class="btn" id="btn-shelf"></button>
+    </div>
+  </div>
+
+  <!-- Карточка жителя -->
+  <div id="resident-card" class="panel hidden">
+    <button class="card-close" id="card-close">✕</button>
+    <div class="card-head">
+      <div class="avatar" id="card-avatar"></div>
+      <div>
+        <div class="card-name" id="card-name"></div>
+        <div class="card-sub" id="card-sub"></div>
+      </div>
+      <div class="mood" id="card-mood"></div>
+    </div>
+    <div class="needs" id="card-needs"></div>
+    <div class="traits" id="card-traits"></div>
+    <div class="relations" id="card-relations"></div>
+    <div class="advice-title" id="advice-title"></div>
+    <div id="advice-grid"></div>
+  </div>
+
+  <!-- Летопись -->
+  <div id="chronicle-panel" class="panel overlay hidden">
+    <button class="card-close" id="chron-close">✕</button>
+    <h2 id="chron-title"></h2>
+    <div class="chron-filters" id="chron-filters"></div>
+    <div class="chron-list" id="chron-list"></div>
+  </div>
+
+  <!-- Письмо дня -->
+  <div id="letter-panel" class="panel overlay hidden">
+    <h2 id="letter-title"></h2>
+    <div class="letter-body" id="letter-body"></div>
+    <button class="btn primary" id="letter-ok"></button>
+  </div>
+
+  <!-- Полка банок -->
+  <div id="shelf-panel" class="panel overlay hidden">
+    <button class="card-close" id="shelf-close">✕</button>
+    <h2 id="shelf-title"></h2>
+    <div id="shelf-grid"></div>
+  </div>
+
+  <!-- Достижения -->
+  <div id="ach-panel" class="panel overlay hidden">
+    <button class="card-close" id="ach-close">✕</button>
+    <h2 id="ach-title"></h2>
+    <div id="ach-list"></div>
+  </div>
+
+  <!-- Настройки -->
+  <div id="settings-panel" class="panel overlay hidden">
+    <button class="card-close" id="settings-close">✕</button>
+    <h2 id="settings-title"></h2>
+    <div id="settings-body"></div>
+  </div>
+
+  <!-- Модальное подтверждение -->
+  <div id="modal" class="overlay hidden">
+    <div class="panel" id="modal-box">
+      <p id="modal-text"></p>
+      <div class="modal-row">
+        <button class="btn" id="modal-cancel"></button>
+        <button class="btn primary" id="modal-ok"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Обучение -->
+  <div id="tutorial" class="hidden"><div id="tutorial-box"><div id="tutorial-text"></div><div class="modal-row"><button class="btn" id="tutorial-skip"></button><button class="btn primary" id="tutorial-next"></button></div></div></div>
+
+  <!-- Тосты -->
+  <div id="toasts"></div>
+
+  <!-- Меню -->
+  <div id="menu" class="hidden">
+    <h1 id="menu-title"></h1>
+    <p id="menu-sub"></p>
+    <button class="btn primary big" id="menu-play"></button>
+    <button class="btn big" id="menu-ach"></button>
+    <button class="btn big" id="menu-lang"></button>
+  </div>
+
+  <!-- Загрузка / ошибки -->
+  <div id="boot"><div id="boot-spinner"></div><p id="boot-text">…</p></div>
+  <div id="fatal" class="hidden"><h2 id="fatal-title"></h2><p id="fatal-text"></p></div>
+</div>
+<script src="libs/three.min.js"></script>
+<script src="js/core/config.js"></script>
+<script src="js/core/util.js"></script>
+<script src="js/core/rng.js"></script>
+<script src="js/core/noise.js"></script>
+<script src="js/core/bus.js"></script>
+<script src="js/core/i18n.js"></script>
+<script src="js/core/ysdk.js"></script>
+<script src="js/core/save.js"></script>
+<script src="js/core/errors.js"></script>
+<script src="js/render/quality.js"></script>
+<script src="js/render/env.js"></script>
+<script src="js/render/jar.js"></script>
+<script src="js/render/planet.js"></script>
+<script src="js/render/sky.js"></script>
+<script src="js/render/post.js"></script>
+<script src="js/render/camera.js"></script>
+<script src="js/render/render.js"></script>
+<script src="js/world/nav.js"></script>
+<script src="js/world/buildings.js"></script>
+<script src="js/world/weather.js"></script>
+<script src="js/world/residents.js"></script>
+<script src="js/world/brain.js"></script>
+<script src="js/world/advice.js"></script>
+<script src="js/world/events.js"></script>
+<script src="js/world/chronicle.js"></script>
+<script src="js/world/world.js"></script>
+<script src="js/audio/audio.js"></script>
+<script src="js/ui/icons.js"></script>
+<script src="js/ui/ui.js"></script>
+<script src="js/game.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
